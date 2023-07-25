@@ -3,7 +3,7 @@ import type { GadgetConnection } from "./GadgetConnection.js";
 import type { GadgetRecord, RecordShape } from "./GadgetRecord.js";
 import { GadgetRecordList } from "./GadgetRecordList.js";
 import type { AnyModelManager } from "./ModelManager.js";
-import type { PaginationOptions, SelectionOptions } from "./operationBuilders.js";
+import type { BaseFindOptions, PaginationOptions } from "./operationBuilders.js";
 import {
   actionOperation,
   findManyOperation,
@@ -29,7 +29,7 @@ export const findOneRunner = async <Shape extends RecordShape = any>(
   id: string | undefined,
   defaultSelection: FieldSelection,
   modelApiIdentifier: string,
-  options?: SelectionOptions | null,
+  options?: BaseFindOptions | null,
   throwOnEmptyData = true
 ) => {
   const plan = findOneOperation(operation, id, defaultSelection, modelApiIdentifier, options);
@@ -46,7 +46,7 @@ export const findOneByFieldRunner = async <Shape extends RecordShape = any>(
   fieldValue: string,
   defaultSelection: FieldSelection,
   modelApiIdentifier: string,
-  options?: SelectionOptions | null
+  options?: BaseFindOptions | null
 ) => {
   const plan = findOneByFieldOperation(operation, fieldName, fieldValue, defaultSelection, modelApiIdentifier, options);
   const response = await modelManager.connection.currentClient.query(plan.query, plan.variables).toPromise();
@@ -94,7 +94,7 @@ export interface ActionRunner {
     modelSelectionField: string,
     isBulkAction: false,
     variables: VariablesOptions,
-    options?: SelectionOptions | null,
+    options?: BaseFindOptions | null,
     namespace?: string | null
   ): Promise<Shape extends void ? void : GadgetRecord<Shape>>;
 
@@ -106,7 +106,7 @@ export interface ActionRunner {
     modelSelectionField: string,
     isBulkAction: true,
     variables: VariablesOptions,
-    options?: SelectionOptions | null,
+    options?: BaseFindOptions | null,
     namespace?: string | null
   ): Promise<Shape extends void ? void : GadgetRecord<Shape>[]>;
 }
@@ -119,7 +119,7 @@ export const actionRunner: ActionRunner = async <Shape extends RecordShape = any
   modelSelectionField: string,
   isBulkAction: boolean,
   variables: VariablesOptions,
-  options?: SelectionOptions | null,
+  options?: BaseFindOptions | null,
   namespace?: string | null
 ) => {
   const plan = actionOperation(operation, defaultSelection, modelApiIdentifier, modelSelectionField, variables, options, namespace);

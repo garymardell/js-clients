@@ -1,6 +1,7 @@
 import type { AnyClient } from "@gadgetinc/api-client-core";
 import { $gadgetConnection } from "@gadgetinc/api-client-core";
-import type { DocumentNode, OperationDefinitionNode } from "graphql";
+import type { DocumentNode, ExecutionResult, OperationDefinitionNode } from "graphql";
+import type { Sink, SubscribePayload, Client as SubscriptionClient } from "graphql-ws";
 import { find, findLast } from "lodash";
 import type { ReactNode } from "react";
 import React, { Suspense } from "react";
@@ -35,6 +36,20 @@ export interface MockUrqlClient extends Client {
     fetch: MockFetchFn;
   };
   _react?: any;
+}
+
+export interface MockSubscription {
+  payload: SubscribePayload;
+  sink: Sink<ExecutionResult<any, any>>;
+  push: (result: ExecutionResult<any, any>) => void;
+  disposed: boolean;
+}
+export type MockSubscribeFn = ((payload: SubscribePayload, sink: Sink<ExecutionResult<any, any>>) => () => void) & {
+  subscriptions: MockSubscription[];
+};
+
+export interface MockGraphQLWSClient extends SubscriptionClient {
+  subscribe: MockSubscribeFn;
 }
 
 export const graphqlDocumentName = (doc: DocumentNode) => {
@@ -124,7 +139,37 @@ const newMockFetchFn = () => {
   return fn;
 };
 
+/**
+ * Create a new function for mocking subscriptions passed to graphql-ws
+ */
+function newMockSubscribeFn(): MockSubscribeFn {
+  const subscriptions: MockSubscription[] = [];
+
+  const fn: SubscriptionClient["subscribe"] = (payload: SubscribePayload, sink: Sink<ExecutionResult<any, any>>) => {
+    const subscription: MockSubscription = {
+      payload,
+      sink,
+      disposed: false,
+      push: (result) => {
+        act(() => {
+          sink.next(result);
+        });
+      },
+    };
+
+    subscriptions.push(subscription);
+
+    return () => {
+      subscription.disposed = true;
+    };
+  };
+
+  return Object.assign(fn, { subscriptions });
+}
+
 export const mockUrqlClient = { suspense: true } as MockUrqlClient;
+export const mockGraphQLWSClient = {} as MockGraphQLWSClient;
+
 beforeEach(() => {
   mockUrqlClient.executeQuery = newMockOperationFn();
   mockUrqlClient.executeMutation = newMockOperationFn();
@@ -132,6 +177,8 @@ beforeEach(() => {
   mockUrqlClient[$gadgetConnection] = {
     fetch: newMockFetchFn(),
   };
+
+  mockGraphQLWSClient.subscribe = newMockSubscribeFn();
 });
 
 afterEach(() => {
@@ -157,6 +204,16 @@ export const createMockUrqlCient = (assertions?: {
 
 export const MockClientWrapper = (api: AnyClient) => (props: { children: ReactNode }) => {
   jest.spyOn(api.connection, "currentClient", "get").mockReturnValue(mockUrqlClient);
+
+  return (
+    <Provider api={api}>
+      <Suspense fallback={<div>Loading...</div>}>{props.children}</Suspense>
+    </Provider>
+  );
+};
+
+export const MockGraphQLWSClientWrapper = (api: AnyClient) => (props: { children: ReactNode }) => {
+  jest.replaceProperty(api.connection, "baseSubscriptionClient", mockGraphQLWSClient);
 
   return (
     <Provider api={api}>

@@ -1,4 +1,9 @@
+import { isLiveQueryOperationDefinitionNode } from "@n1ru4l/graphql-live-query";
+import { applyLiveQueryJSONDiffPatch } from "@n1ru4l/graphql-live-query-patch-jsondiffpatch";
+import { applyAsyncIterableIteratorToSink, makeAsyncIterableIteratorFromSink } from "@n1ru4l/push-pull-async-iterable-iterator";
+
 import type { ClientOptions, RequestPolicy } from "@urql/core";
+
 import { Client, cacheExchange, fetchExchange, subscriptionExchange } from "@urql/core";
 import fetchPolyfill from "cross-fetch";
 import type { ExecutionResult } from "graphql";
@@ -10,6 +15,7 @@ import { BrowserSessionStorageType } from "./ClientOptions.js";
 import { GadgetTransaction, TransactionRolledBack } from "./GadgetTransaction.js";
 import type { BrowserStorage } from "./InMemoryStorage.js";
 import { InMemoryStorage } from "./InMemoryStorage.js";
+import { urlParamExchange } from "./exchanges.js";
 import {
   GadgetUnexpectedCloseError,
   GadgetWebsocketConnectionTimeoutError,
@@ -18,7 +24,6 @@ import {
   storageAvailable,
   traceFunction,
 } from "./support.js";
-import { urlParamExchange } from "./urlParamExchange.js";
 
 export type TransactionRun<T> = (transaction: GadgetTransaction) => Promise<T>;
 export interface GadgetSubscriptionClientOptions extends Partial<SubscriptionClientOptions> {
@@ -80,7 +85,7 @@ export class GadgetConnection {
 
   // the base client using HTTP requests that non-transactional operations will use
   private baseClient: Client;
-  private baseSubscriptionClient: SubscriptionClient;
+  baseSubscriptionClient: SubscriptionClient;
 
   // the transactional websocket client that will be used inside a transaction block
   private currentTransaction: GadgetTransaction | null = null;
@@ -337,7 +342,7 @@ export class GadgetConnection {
     }
 
     exchanges.push(
-      fetchExchange,
+      // standard subscriptions for normal GraphQL subscriptions
       subscriptionExchange({
         forwardSubscription: (request) => {
           return {
@@ -350,7 +355,31 @@ export class GadgetConnection {
             },
           };
         },
-      })
+      }),
+      // Live queries pass through the same WS client, but use jsondiffs for patching
+      subscriptionExchange({
+        isSubscriptionOperation: (request) => {
+          return request.query.definitions.some((definition) => isLiveQueryOperationDefinitionNode(definition, request.variables as any));
+        },
+        forwardSubscription: (request) => {
+          return {
+            subscribe: (sink) => {
+              const input = { ...request, query: request.query || "" };
+              return {
+                unsubscribe: applyAsyncIterableIteratorToSink(
+                  applyLiveQueryJSONDiffPatch(
+                    makeAsyncIterableIteratorFromSink<ExecutionResult>((sink) =>
+                      this.baseSubscriptionClient.subscribe(input, sink as Sink<ExecutionResult>)
+                    )
+                  ),
+                  sink
+                ),
+              };
+            },
+          };
+        },
+      }),
+      fetchExchange
     );
 
     const client = new Client({
