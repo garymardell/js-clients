@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
+import { isLiveQueryOperationDefinitionNode } from "@n1ru4l/graphql-live-query";
+import { applyLiveQueryJSONDiffPatch } from "@n1ru4l/graphql-live-query-patch-jsondiffpatch";
+import { applyAsyncIterableIteratorToSink, makeAsyncIterableIteratorFromSink } from "@n1ru4l/push-pull-async-iterable-iterator";
 import type { ClientOptions, RequestPolicy } from "@urql/core";
+
 import { Client, cacheExchange, fetchExchange, subscriptionExchange } from "@urql/core";
 
 import type { ExecutionResult } from "graphql";
@@ -359,7 +363,30 @@ export class GadgetConnection {
           };
         },
       }),
-      ...this.exchanges.afterAll
+      ...this.exchanges.afterAll,
+      // Live queries pass through the same WS client, but use jsondiffs for patching
+      subscriptionExchange({
+        isSubscriptionOperation: (request) => {
+          return request.query.definitions.some((definition) => isLiveQueryOperationDefinitionNode(definition, request.variables as any));
+        },
+        forwardSubscription: (request) => {
+          return {
+            subscribe: (sink) => {
+              const input = { ...request, query: request.query || "" };
+              return {
+                unsubscribe: applyAsyncIterableIteratorToSink(
+                  applyLiveQueryJSONDiffPatch(
+                    makeAsyncIterableIteratorFromSink<ExecutionResult>((sink) =>
+                      this.getBaseSubscriptionClient().subscribe(input, sink as Sink<ExecutionResult>)
+                    )
+                  ),
+                  sink
+                ),
+              };
+            },
+          };
+        },
+      }),
     );
 
     const client = new Client({

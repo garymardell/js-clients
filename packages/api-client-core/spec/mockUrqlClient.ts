@@ -1,11 +1,12 @@
 import type { Client, GraphQLRequest, OperationContext, OperationResult, OperationResultSource } from "@urql/core";
 import { createRequest, makeErrorResult } from "@urql/core";
-import type { DocumentNode, OperationDefinitionNode } from "graphql";
+import type { DocumentNode, ExecutionResult, OperationDefinitionNode } from "graphql";
 import { find, findLast } from "lodash";
 import { act } from "react-dom/test-utils";
 import type { Sink, Source, Subject } from "wonka";
 import { filter, makeSubject, pipe, subscribe, take, toPromise } from "wonka";
 import { $gadgetConnection } from "../src/GadgetConnection.js";
+import type { SubscribePayload, Client as SubscriptionClient, Sink as SubscriptionSink } from "graphql-ws";
 
 /** Patches a `toPromise` method onto the `Source` passed to it.
  * @param source$ - the Wonka {@link Source} to patch.
@@ -51,6 +52,21 @@ export interface MockUrqlClient extends Client {
   };
   mockFetch: MockFetchFn;
   _react?: any;
+}
+
+export interface MockSubscription {
+  payload: SubscribePayload;
+  sink: SubscriptionSink<ExecutionResult<any, any>>;
+  push: (result: ExecutionResult<any, any>) => void;
+  disposed: boolean;
+}
+
+export type MockSubscribeFn = ((payload: SubscribePayload, sink: SubscriptionSink<ExecutionResult<any, any>>) => () => void) & {
+  subscriptions: MockSubscription[];
+};
+
+export interface MockGraphQLWSClient extends SubscriptionClient {
+  subscribe: MockSubscribeFn;
 }
 
 export const graphqlDocumentName = (doc: DocumentNode) => {
@@ -140,6 +156,34 @@ const newMockFetchFn = () => {
   return fn;
 };
 
+/**
+ * Create a new function for mocking subscriptions passed to graphql-ws
+ */
+function newMockSubscribeFn(): MockSubscribeFn {
+  const subscriptions: MockSubscription[] = [];
+
+  const fn: SubscriptionClient["subscribe"] = (payload: SubscribePayload, sink: SubscriptionSink<ExecutionResult<any, any>>) => {
+    const subscription: MockSubscription = {
+      payload,
+      sink,
+      disposed: false,
+      push: (result) => {
+        act(() => {
+          sink.next(result);
+        });
+      },
+    };
+
+    subscriptions.push(subscription);
+
+    return () => {
+      subscription.disposed = true;
+    };
+  };
+
+  return Object.assign(fn, { subscriptions });
+}
+
 export const createMockUrqlClient = (assertions?: {
   mutationAssertions?: (request: GraphQLRequest) => void;
   queryAssertions?: (request: GraphQLRequest) => void;
@@ -169,6 +213,7 @@ export const createMockUrqlClient = (assertions?: {
 };
 
 export const mockUrqlClient = createMockUrqlClient();
+export const mockGraphQLWSClient = {} as MockGraphQLWSClient;
 
 beforeEach(() => {
   const fetch = newMockFetchFn();
@@ -180,6 +225,7 @@ beforeEach(() => {
     fetch,
   };
   mockUrqlClient.mockFetch = fetch;
+  mockGraphQLWSClient.subscribe = newMockSubscribeFn();
 });
 
 afterEach(() => {

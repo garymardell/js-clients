@@ -24,7 +24,10 @@ const fieldSelectionToQueryCompilerFields = (selection: FieldSelection, includeT
 type AnySort = any;
 type AnyFilter = any;
 
-export type SelectionOptions = { select?: any };
+export type BaseFindOptions = {
+  live?: boolean;
+  select?: any;
+};
 
 export type PaginationOptions = {
   sort?: AnySort | null;
@@ -34,16 +37,21 @@ export type PaginationOptions = {
   first?: number | null;
   before?: string | null;
   last?: number | null;
-} & SelectionOptions;
+} & BaseFindOptions;
 
 export type FindFirstPaginationOptions = Omit<PaginationOptions, "first" | "last" | "before" | "after">;
+
+const directivesForOptions = (options?: BaseFindOptions | null) => {
+  if (options?.live) return ["@live"];
+  return undefined;
+};
 
 export const findOneOperation = (
   operation: string,
   id: string | undefined,
   defaultSelection: FieldSelection,
   modelApiIdentifier: string,
-  options?: SelectionOptions | null
+  options?: BaseFindOptions | null
 ) => {
   const variables: Record<string, Variable> = {};
   if (typeof id !== "undefined") variables.id = Var({ type: "GadgetID!", value: id });
@@ -54,6 +62,7 @@ export const findOneOperation = (
       [operation]: Call(variables, fieldSelectionToQueryCompilerFields(options?.select || defaultSelection, true)),
       ...hydrationOptions(modelApiIdentifier),
     },
+    directives: directivesForOptions(options),
   });
 };
 
@@ -63,10 +72,10 @@ export const findOneByFieldOperation = (
   fieldValue: string,
   defaultSelection: FieldSelection,
   modelApiIdentifier: string,
-  options?: SelectionOptions | null
+  options?: BaseFindOptions | null
 ) => {
   return findManyOperation(operation, defaultSelection, modelApiIdentifier, {
-    select: options?.select,
+    ...options,
     first: 2,
     filter: {
       [fieldName]: {
@@ -106,6 +115,7 @@ export const findManyOperation = (
       ),
       ...hydrationOptions(modelApiIdentifier),
     },
+    directives: directivesForOptions(options),
   });
 };
 
@@ -130,7 +140,7 @@ export const actionOperation = (
   modelApiIdentifier: string,
   modelSelectionField: string,
   variables: VariablesOptions,
-  options?: SelectionOptions | null,
+  options?: BaseFindOptions | null,
   namespace?: string | null,
   isBulkAction?: boolean | null,
   hasReturnType?: boolean | null
@@ -159,12 +169,18 @@ export const actionOperation = (
       ...fields,
       ...hydrationOptions(modelApiIdentifier),
     },
+    directives: directivesForOptions(options),
   };
 
   return compileWithVariableValues(actionOperation);
 };
 
-export const globalActionOperation = (operation: string, variables: VariablesOptions, namespace?: string | null) => {
+export const globalActionOperation = (
+  operation: string,
+  variables: VariablesOptions,
+  namespace?: string | null,
+  options?: { live?: boolean }
+) => {
   let fields: BuilderFieldSelection = {
     [operation]: Call(variableOptionsToVariables(variables), {
       success: true,
@@ -185,5 +201,6 @@ export const globalActionOperation = (operation: string, variables: VariablesOpt
     type: "mutation",
     name: operation,
     fields,
+    directives: directivesForOptions(options),
   });
 };
