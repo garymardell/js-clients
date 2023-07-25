@@ -165,6 +165,46 @@ describe("compiling queries with field calls", () => {
     `);
   });
 
+  test("it should compile a query that calls a field with a null variable", () => {
+    const result = compile({
+      type: "query",
+      fields: {
+        id: true,
+        name: true,
+        truncatedHTML: Call({ length: Var({ type: "String", value: null }) }),
+      },
+    });
+
+    expectValidGraphQLQuery(result);
+    expect(result).toMatchInlineSnapshot(`
+      "query ($length: String) {
+        id
+        name
+        truncatedHTML(length: $length) 
+      }"
+    `);
+  });
+
+  test("it should compile a query that calls a field with an undefined variable", () => {
+    const result = compile({
+      type: "query",
+      fields: {
+        id: true,
+        name: true,
+        truncatedHTML: Call({ length: Var({ type: "String", value: undefined }) }),
+      },
+    });
+
+    expectValidGraphQLQuery(result);
+    expect(result).toMatchInlineSnapshot(`
+      "query ($length: String) {
+        id
+        name
+        truncatedHTML(length: $length) 
+      }"
+    `);
+  });
+
   test("it should compile a query that calls a field with a subselection", () => {
     const result = compile({
       type: "query",
@@ -242,7 +282,7 @@ describe("compiling queries with field calls", () => {
         "query  {
           id
           name
-          truncatedHTML(length: $length) 
+          truncatedHTML 
         }"
       `);
       expect(variables).toEqual({});
@@ -297,6 +337,86 @@ describe("compiling queries with field calls", () => {
       expect(query).toContain("$count: Int");
       expect(query).toContain("first: $count");
       expect(variables).toEqual({ count: 10 });
+    });
+
+    test("it should compile a query and variables with a null variable", () => {
+      const { query, variables } = compileWithVariableValues({
+        type: "query",
+        fields: {
+          id: true,
+          name: true,
+          truncatedHTML: Call({ length: Var({ type: "String", value: null }) }),
+        },
+      });
+
+      expectValidGraphQLQuery(query);
+      expect(query).not.toContain("length:");
+      expect(query).toMatchInlineSnapshot(`
+        "query  {
+          id
+          name
+          truncatedHTML 
+        }"
+      `);
+      expect(variables).toMatchInlineSnapshot(`{}`);
+    });
+
+    test("it should compile a query and variables with an undefined variable", () => {
+      const { query, variables } = compileWithVariableValues({
+        type: "query",
+        fields: {
+          id: true,
+          name: true,
+          truncatedHTML: Call({ length: Var({ type: "String", value: undefined }) }),
+        },
+      });
+
+      expectValidGraphQLQuery(query);
+      expect(query).not.toContain("length:");
+      expect(query).toMatchInlineSnapshot(`
+        "query  {
+          id
+          name
+          truncatedHTML 
+        }"
+      `);
+      expect(variables).toMatchInlineSnapshot(`{}`);
+    });
+
+    test("it should compile a mix of variables and plain values", () => {
+      const { query, variables } = compileWithVariableValues({
+        type: "query",
+        fields: {
+          users: Call(
+            {
+              first: Var({ type: "Int", value: 10 }),
+              after: Var({ type: "String", value: "cursor" }),
+              before: Var({ type: "String", value: null }),
+              filter: "bar",
+            },
+            {
+              id: true,
+              name: true,
+            }
+          ),
+        },
+      });
+
+      expectValidGraphQLQuery(query);
+      expect(query).toMatchInlineSnapshot(`
+        "query ($first: Int, $after: String) {
+          users(first: $first, after: $after, filter: "bar") { 
+            id
+            name 
+          }
+        }"
+      `);
+      expect(variables).toMatchInlineSnapshot(`
+        {
+          "after": "cursor",
+          "first": 10,
+        }
+      `);
     });
   });
 });
