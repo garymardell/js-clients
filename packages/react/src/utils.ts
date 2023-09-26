@@ -70,7 +70,7 @@ export declare type ReadOperationOptions = {
   /**
    * Marks this query as a live query that will subscribe to changes from the backend and re-render when backend data changes with the newest data.
    */
-  live?: boolean;
+  live?: boolean | { throttle: number };
 };
 
 /**
@@ -312,7 +312,7 @@ export type OptionsType = {
   /** What fields to select from the resulting object */
   select?: FieldSelection;
   /** Subscribe to changes from the backend and return a new result as it changes */
-  live?: boolean;
+  live?: boolean | { throttle: number };
 };
 
 /**

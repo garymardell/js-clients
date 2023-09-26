@@ -25,7 +25,7 @@ type AnySort = any;
 type AnyFilter = any;
 
 export type BaseFindOptions = {
-  live?: boolean;
+  live?: boolean | { throttle: number };
   select?: any;
 };
 
@@ -42,8 +42,13 @@ export type PaginationOptions = {
 export type FindFirstPaginationOptions = Omit<PaginationOptions, "first" | "last" | "before" | "after">;
 
 const directivesForOptions = (options?: BaseFindOptions | null) => {
-  if (options?.live) return ["@live"];
-  return undefined;
+  if (!options?.live) return undefined;
+
+  if (typeof options.live === "boolean") {
+    return ["@live"];
+  } else {
+    return [`@live(throttle: ${options.live.throttle})`];
+  }
 };
 
 export const findOneOperation = (
