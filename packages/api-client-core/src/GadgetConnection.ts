@@ -386,7 +386,7 @@ export class GadgetConnection {
             },
           };
         },
-      }),
+      })
     );
 
     const client = new Client({

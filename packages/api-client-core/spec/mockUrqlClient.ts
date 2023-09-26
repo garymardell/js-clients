@@ -1,12 +1,12 @@
 import type { Client, GraphQLRequest, OperationContext, OperationResult, OperationResultSource } from "@urql/core";
 import { createRequest, makeErrorResult } from "@urql/core";
 import type { DocumentNode, ExecutionResult, OperationDefinitionNode } from "graphql";
+import type { SubscribePayload, Client as SubscriptionClient, Sink as SubscriptionSink } from "graphql-ws";
 import { find, findLast } from "lodash";
 import { act } from "react-dom/test-utils";
 import type { Sink, Source, Subject } from "wonka";
 import { filter, makeSubject, pipe, subscribe, take, toPromise } from "wonka";
 import { $gadgetConnection } from "../src/GadgetConnection.js";
-import type { SubscribePayload, Client as SubscriptionClient, Sink as SubscriptionSink } from "graphql-ws";
 
 /** Patches a `toPromise` method onto the `Source` passed to it.
  * @param source$ - the Wonka {@link Source} to patch.

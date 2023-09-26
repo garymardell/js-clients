@@ -1,11 +1,11 @@
 import type { AnyClient } from "@gadgetinc/api-client-core";
+import type { ExecutionResult } from "graphql";
+import type { Sink, SubscribePayload } from "graphql-ws";
 import type { ReactNode } from "react";
 import React, { Suspense } from "react";
 import type { MockUrqlClient } from "../../api-client-core/spec/mockUrqlClient.js";
 import { createMockUrqlClient, mockGraphQLWSClient, mockUrqlClient } from "../../api-client-core/spec/mockUrqlClient.js";
 import { Provider } from "../src/GadgetProvider.js";
-import { ExecutionResult } from "graphql";
-import { Sink, SubscribePayload } from "graphql-ws";
 
 export interface MockSubscription {
   payload: SubscribePayload;
@@ -25,7 +25,6 @@ export const MockClientWrapper = (api: AnyClient, urqlClient?: MockUrqlClient) =
     </Provider>
   );
 };
-
 
 export const MockGraphQLWSClientWrapper = (api: AnyClient) => (props: { children: ReactNode }) => {
   jest.replaceProperty(api.connection, "baseSubscriptionClient", mockGraphQLWSClient);
